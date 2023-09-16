@@ -6,13 +6,12 @@ import { connect } from 'mqtt';
 import { defaultLogger as logger } from './logger.js';
 
 import sshInfo from './ssh-info.json' assert { type: 'json' };
+import mqttInfo from './mqtt-info.json' assert {type: 'json'};
 
 const protocol = 'mqtt';
-const host = 'pi.local';
-const port = '1883';
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
 
-const connectUrl = `${protocol}://${host}:${port}`;
+const connectUrl = `${protocol}://${mqttInfo.host}:${mqttInfo.port}`;
 
 const client = connect(connectUrl, {
   clientId,
