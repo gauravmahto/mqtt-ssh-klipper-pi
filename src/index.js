@@ -53,7 +53,7 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
     .on('ready', async () => {
 
       const afterMin = 10;
-      const afterMSecs = afterMin * 60 * 1000;
+      const afterMSecs = (afterMin + 5) * 60 * 1000;
 
       conn.exec(`/usr/sbin/shutdown ${afterMin}`, (err, stream) => {
 
