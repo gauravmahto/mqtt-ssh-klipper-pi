@@ -1,5 +1,9 @@
 import log from 'node-file-logger';
 
+import loggerConfig from './configs/node-file-logger.json' assert {type: 'json'};
+
+log.SetUserOptions(loggerConfig);
+
 export class Logger {
 
   #loggers = [];

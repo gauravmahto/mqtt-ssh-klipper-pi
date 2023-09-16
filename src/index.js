@@ -5,8 +5,8 @@ import { connect } from 'mqtt';
 
 import { defaultLogger as logger } from './logger.js';
 
-import sshInfo from './ssh-info.json' assert { type: 'json' };
-import mqttInfo from './mqtt-info.json' assert {type: 'json'};
+import sshInfo from './configs/ssh-info.json' assert { type: 'json' };
+import mqttInfo from './configs/mqtt-info.json' assert {type: 'json'};
 
 const protocol = 'mqtt';
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
