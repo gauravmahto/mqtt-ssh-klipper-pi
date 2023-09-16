@@ -137,8 +137,6 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
 
 };
 
-actionHandler[ACTIONS.POWER_OFF]();
-
 client.on('connect', () => {
 
   logger.info('Connected');
