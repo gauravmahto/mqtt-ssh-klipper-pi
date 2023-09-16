@@ -1,9 +1,12 @@
+import 'dotenv/config';
+
 import { readFile } from 'node:fs/promises';
 
 import { Client } from 'ssh2';
 import { connect } from 'mqtt';
 
 import { defaultLogger as logger } from './logger.js';
+import { toggleSwitch } from './home-assistant.js';
 
 import sshInfo from './configs/ssh-info.json' assert { type: 'json' };
 import mqttInfo from './configs/mqtt-info.json' assert {type: 'json'};
@@ -23,11 +26,6 @@ const client = connect(connectUrl, {
 });
 
 const topics = [
-  'klipper/moonraker/api/request',
-  'klipper/moonraker/api/response',
-  'klipper/moonraker/printer/info/request',
-  'klipper/moonraker/printer/info/response',
-  'klipper/klipper/alert',
   'klipper/alert'
 ];
 
@@ -52,19 +50,37 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
   const conn = new Client();
 
   conn
-    .on('ready', () => {
+    .on('ready', async () => {
 
-      conn.exec('/usr/sbin/shutdown 300', (err, stream) => {
+      const afterMin = 10;
+      const afterMSecs = afterMin * 60 * 1000;
+
+      conn.exec(`/usr/sbin/shutdown ${afterMin}`, (err, stream) => {
 
         if (err) throw err;
 
-        handleStream(stream, conn, undefined, (data, stream) => {
+        async function switchOffPowerToPi() {
+
+          await toggleSwitch({
+            switchName: process.env.SWITCH_NAME,
+            entity_id: process.env.SWITCH_ENTITY_ID
+          });
+
+        }
+
+        handleStream(stream, conn, async () => {
+
+          setTimeout(switchOffPowerToPi, afterMSecs);
+
+        }, async (data, stream) => {
 
           conn.exec('cat /run/systemd/shutdown/scheduled', (err, stream) => {
 
             if (err) throw err;
 
             handleStream(stream);
+
+            setTimeout(switchOffPowerToPi, afterMSecs);
 
           });
 
@@ -80,7 +96,7 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
   // conn
   //   .on('ready', () => {
 
-  //     logger.log('Client :: ready');
+  //     logger.log(`Client :: ready`);
 
   //     conn.exec('sudo su -', { pty: true }, (err, stream) => {
 
@@ -91,14 +107,14 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
   //       stream
   //         .on('close', (code, signal) => {
 
-  //           logger.debug('Stream :: close :: code: ' + code + ', signal: ' + signal);
+  //          logger.debug(`Stream :: close :: code: ${code}, signal: ${signal}`);
 
   //           conn.end();
 
   //         })
   //         .on('data', (data) => {
 
-  //           logger.info('STDOUT: ' + data);
+  //           logger.info(`STDOUT: ${data}`);
 
   //           if (data.toString().includes(`root@${sudoUserName}`)) {
   //             //logged in successfully
@@ -106,12 +122,12 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
   //             conn.exec('poweroff --help', (err, stream) => {
   //               if (err) throw err;
   //               stream.on('close', (code, signal) => {
-  //                 logger.log('Stream :: close :: code: ' + code + ', signal: ' + signal);
+  //                logger.log(`Stream :: close :: code: ${code}, signal: ${signal}`);
   //                 conn.end();
   //               }).on('data', (data) => {
-  //                 logger.log('STDOUT: ' + data);
+  //                 logger.log(`STDOUT: ${data}`);
   //               }).stderr.on('data', (data) => {
-  //                 logger.log('STDERR: ' + data);
+  //                 logger.log(`STDERR: ${data}`);
   //               });
   //             });
 
@@ -124,7 +140,7 @@ actionHandler[ACTIONS.POWER_OFF] = async () => {
   //         })
   //         .stderr.on('data', (data) => {
 
-  //           logger.error('STDERR: ' + data);
+  //           logger.error(`STDERR: ${data}`);
 
   //         });
 
@@ -171,7 +187,7 @@ client.on('connect', () => {
 
       const data = safeParse(payload.toString()) ?? payload.toString();
 
-      logger.log('Received Message:', topic, data);
+      logger.log(`Received Message: ${topic}. JSON data - ${data}`);
 
       const handler = parseAction(data);
 
@@ -243,7 +259,7 @@ function safeCb(cb) {
 
   cb = isValidFunction(cb) ? cb : () => {
 
-    logger.debug('No cb provided');
+    logger.debug(`No cb provided`);
 
   };
 
@@ -256,14 +272,14 @@ function handleStream(stream, conn, dataHandler, errHandler, dataloggerId = 'STD
   stream
     .on('close', (code, signal) => {
 
-      logger.debug('Stream :: close :: code: ' + code + ', signal: ' + signal);
+      logger.debug(`Stream :: close :: code: ${code}, signal: ${signal}`);
 
       // conn.end();
 
     })
     .on('data', (data) => {
 
-      logger.info(dataloggerId + data);
+      logger.info(`${dataloggerId} ${data}`);
 
       safeCb(dataHandler)(data, stream);
 
@@ -272,12 +288,12 @@ function handleStream(stream, conn, dataHandler, errHandler, dataloggerId = 'STD
     })
     .on('end', (data) => {
 
-      logger.debug('Connection disconnected');
+      logger.debug(`Connection disconnected`);
 
     })
     .stderr.on('data', (data) => {
 
-      logger.error('STDERR: ' + data);
+      logger.error(`STDERR: ${data}`);
 
       safeCb(errHandler)(data, stream);
 

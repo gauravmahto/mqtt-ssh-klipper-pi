@@ -123,4 +123,4 @@ class SimpleFileLogger {
 
 }
 
-export const defaultLogger = new Logger([new SimpleFileLogger, console]);
+export const defaultLogger = new Logger([new SimpleFileLogger(), console]);
