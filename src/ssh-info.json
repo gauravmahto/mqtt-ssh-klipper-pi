@@ -1,0 +1,6 @@
+{
+  "host": "pi.local",
+  "port": 22,
+  "username": "pi",
+  "privateKeyPath": "/home/pi/.ssh/id_pi.local"
+}
