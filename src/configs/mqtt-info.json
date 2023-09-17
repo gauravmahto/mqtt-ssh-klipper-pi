@@ -1,4 +1,7 @@
 {
   "host": "pi.local",
-  "port": "1883"
+  "port": "1883",
+  "topics": [
+    "klipper/alert"
+  ]
 }
