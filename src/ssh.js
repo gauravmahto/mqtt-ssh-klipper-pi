@@ -18,13 +18,15 @@ assert.ok(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN, 'EXTRA_WAIT_FOR_PI_SWITCH en
 
 export const ACTIONS = {
 
-  POWER_OFF: 'power_off'
+  POWER_OFF: 'power_off',
+  PRINT_START: 'print_start'
 
 };
 
 export const actionHandler = {
 
-  [ACTIONS.POWER_OFF]: initiateShutDown
+  [ACTIONS.POWER_OFF]: initiateShutDown,
+  [ACTIONS.PRINT_START]: clearPendingTimeouts
 
 };
 
@@ -33,6 +35,9 @@ export function parseAction(data) {
   if (isValidString(data)) {
 
     switch (data) {
+
+      case ACTIONS.PRINT_START:
+        return safeCb(actionHandler[ACTIONS.PRINT_START]);
 
       case ACTIONS.POWER_OFF:
         return safeCb(actionHandler[ACTIONS.POWER_OFF]);
@@ -172,7 +177,11 @@ async function clearPendingTimeouts() {
 
   if (null !== pendingTimeoutId) {
 
+    logger.debug(`Clearing pending timeout[ssh.js] ${pendingTimeoutId}`);
+
     clearTimeout(Number(pendingTimeoutId));
+
+    await redisClient.del(pendingTimeoutIdRedisId);
 
   }
 

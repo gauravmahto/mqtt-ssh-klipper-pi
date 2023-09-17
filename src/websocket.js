@@ -67,6 +67,8 @@ async function takeAction(message, ws) {
 
         if (null !== pendingTimeoutId) {
 
+          logger.debug(`Clearing pending timeout[websocket.js] ${pendingTimeoutId}`);
+
           clearTimeout(Number(pendingTimeoutId));
 
           await redisClient.del(pendingTimeoutIdRedisId);
