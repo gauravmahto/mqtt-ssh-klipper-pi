@@ -1,12 +1,20 @@
 import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
 
 import { Client } from 'ssh2';
 
 import { isValidString, safeCb } from './utils.js';
 import { defaultLogger as logger } from './logger.js';
 import { setSwitchState } from './home-assistant.js';
+import { redisClient } from './redis.js';
+import { pendingTimeoutIdRedisId } from './constants.js';
 
 import sshInfo from './configs/ssh-info.json' assert { type: 'json' };
+
+assert.ok(process.env.SWITCH_NAME, 'SWITCH_NAME env. variable is not provided');
+assert.ok(process.env.SWITCH_ENTITY_ID, 'SWITCH_ENTITY_ID env. variable is not provided');
+assert.ok(process.env.PI_SHUTDOWN_MIN, 'PI_SHUTDOWN_MIN env. variable is not provided');
+assert.ok(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN, 'EXTRA_WAIT_FOR_PI_SWITCH env. variable is not provided');
 
 export const ACTIONS = {
 
@@ -42,55 +50,21 @@ export function parseAction(data) {
 
 }
 
-function handleStream(stream, conn, dataHandler, errHandler, dataloggerId = 'STDOUT: ') {
-
-  stream
-    .on('close', (code, signal) => {
-
-      logger.debug(`Stream :: close :: code: ${code}, signal: ${signal}`);
-
-      // conn.end();
-
-    })
-    .on('data', (data) => {
-
-      logger.info(`${dataloggerId} ${data}`);
-
-      safeCb(dataHandler)(data, stream);
-
-      return stream;
-
-    })
-    .on('end', (data) => {
-
-      logger.debug(`Connection disconnected`);
-
-    })
-    .stderr.on('data', (data) => {
-
-      logger.error(`STDERR: ${data}`);
-
-      safeCb(errHandler)(data, stream);
-
-      return stream;
-
-    });
-
-}
-
 async function initiateShutDown() {
 
   logger.info(`${ACTIONS.POWER_OFF} event handler invoked`);
 
   sshInfo.privateKey = await readFile(sshInfo.privateKeyPath);
 
+  await clearPendingTimeouts();
+
   const conn = new Client();
 
   conn
     .on('ready', async () => {
 
-      const afterMin = 10;
-      const afterMSecs = (afterMin + 5) * 60 * 1000;
+      const afterMin = Number(process.env.PI_SHUTDOWN_MIN);
+      const afterMSecs = (afterMin + Number(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN)) * 60 * 1000;
 
       conn.exec(`/usr/sbin/shutdown ${afterMin}`, (err, stream) => {
 
@@ -109,17 +83,17 @@ async function initiateShutDown() {
 
         handleStream(stream, conn, async () => {
 
-          setTimeout(switchOffPowerToPi, afterMSecs);
+          await schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs);
 
         }, async (data, stream) => {
 
-          conn.exec('cat /run/systemd/shutdown/scheduled', (err, stream) => {
+          conn.exec('cat /run/systemd/shutdown/scheduled', async (err, stream) => {
 
             if (err) throw err;
 
             handleStream(stream);
 
-            setTimeout(switchOffPowerToPi, afterMSecs);
+            await schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs);
 
           });
 
@@ -191,3 +165,60 @@ async function initiateShutDown() {
   // #endregion - perform su and run command
 
 };
+
+async function clearPendingTimeouts() {
+
+  let pendingTimeoutId = await redisClient.get(pendingTimeoutIdRedisId);
+
+  if (null !== pendingTimeoutId) {
+
+    clearTimeout(Number(pendingTimeoutId));
+
+  }
+
+}
+
+async function schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs) {
+
+  await clearPendingTimeouts();
+
+  const pendingTimeoutId = String(setTimeout(switchOffPowerToPi, afterMSecs));
+  await redisClient.set(pendingTimeoutIdRedisId, pendingTimeoutId);
+
+}
+
+function handleStream(stream, conn, dataHandler, errHandler, dataloggerId = 'STDOUT: ') {
+
+  stream
+    .on('close', (code, signal) => {
+
+      logger.debug(`Stream :: close :: code: ${code}, signal: ${signal}`);
+
+      // conn.end();
+
+    })
+    .on('data', (data) => {
+
+      logger.info(`${dataloggerId} ${data}`);
+
+      safeCb(dataHandler)(data, stream);
+
+      return stream;
+
+    })
+    .on('end', (data) => {
+
+      logger.debug(`Connection disconnected`);
+
+    })
+    .stderr.on('data', (data) => {
+
+      logger.error(`STDERR: ${data}`);
+
+      safeCb(errHandler)(data, stream);
+
+      return stream;
+
+    });
+
+}

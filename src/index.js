@@ -1,5 +1,7 @@
 // Import as early as possible
 import 'dotenv/config';
+import './websocket.js'
+import './redis.js'
 
 import { connect } from 'mqtt';
 
@@ -9,6 +11,8 @@ import { safeParse } from './utils.js';
 
 import mqttInfo from './configs/mqtt-info.json' assert {type: 'json'};
 
+logger.warn(' ---------- Make sure to provide all of the required env. variables ---------- ');
+
 const protocol = 'mqtt';
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
 
@@ -17,10 +21,10 @@ const connectUrl = `${protocol}://${mqttInfo.host}:${mqttInfo.port}`;
 const client = connect(connectUrl, {
   clientId,
   clean: true,
-  connectTimeout: 4000,
-  username: '',
-  password: '',
-  reconnectPeriod: 1000,
+  connectTimeout: mqttInfo.connectTimeout,
+  username: process.env.MQTT_USERNAME,
+  password: process.env.MQTT_PASSWORD,
+  reconnectPeriod: mqttInfo.reconnectPeriod,
 });
 
 client.on('connect', () => {

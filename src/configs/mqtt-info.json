@@ -1,6 +1,8 @@
 {
   "host": "pi.local",
   "port": "1883",
+  "connectTimeout": 4000,
+  "reconnectPeriod": 8000,
   "topics": [
     "klipper/alert"
   ]

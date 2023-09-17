@@ -1,7 +1,11 @@
+import assert from 'node:assert/strict';
+
 import HomeAssistant from 'homeassistant';
 
 import { defaultLogger as logger } from './logger.js';
 import { waitForSecs } from './utils.js';
+
+assert.ok(process.env.HOME_ASSISTANT_TOKEN, 'HOME_ASSISTANT_TOKEN env. variable is not provided');
 
 const hass = new HomeAssistant({
   // Your Home Assistant host
