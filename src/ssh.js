@@ -19,18 +19,20 @@ assert.ok(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN, 'EXTRA_WAIT_FOR_PI_SWITCH en
 export const ACTIONS = {
 
   POWER_OFF: 'power_off',
-  PRINT_START: 'print_start'
+  PRINT_START: 'print_start',
+  PRINT_CANCEL: 'print_cancel'
 
 };
 
 export const actionHandler = {
 
   [ACTIONS.POWER_OFF]: initiateShutDown,
-  [ACTIONS.PRINT_START]: clearPendingTimeouts
+  [ACTIONS.PRINT_START]: clearPendingTimeouts,
+  [ACTIONS.PRINT_CANCEL]: clearPendingTimeouts
 
 };
 
-export function parseAction(data) {
+export function parseAction(data, topic) {
 
   if (isValidString(data)) {
 
@@ -39,11 +41,14 @@ export function parseAction(data) {
       case ACTIONS.PRINT_START:
         return safeCb(actionHandler[ACTIONS.PRINT_START]);
 
+      case ACTIONS.PRINT_CANCEL:
+        return safeCb(actionHandler[ACTIONS.PRINT_CANCEL]);
+
       case ACTIONS.POWER_OFF:
         return safeCb(actionHandler[ACTIONS.POWER_OFF]);
 
       default:
-        logger.debug(`No action identified via. passed action [${data}]`);
+        logger.debug(`No action identified via. passed action [${topic} - ${data}]`);
 
     }
 

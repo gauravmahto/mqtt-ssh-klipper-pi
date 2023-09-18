@@ -7,50 +7,60 @@ import { ENUMS, ENUMS_DEFINITION } from './enums.js';
 
 import websocketConfig from './configs/websocket-info.json' assert {type: 'json'};
 
-const wss = new WebSocketServer({
+export const startWebSocketServer = async () => {
 
-  port: websocketConfig.port,
-  perMessageDeflate: {
-    zlibDeflateOptions: {
-      // See zlib defaults.
-      chunkSize: 1024,
-      memLevel: 7,
-      level: 3
-    },
-    zlibInflateOptions: {
-      chunkSize: 10 * 1024
-    },
-    // Other options settable:
-    clientNoContextTakeover: true, // Defaults to negotiated value.
-    serverNoContextTakeover: true, // Defaults to negotiated value.
-    serverMaxWindowBits: 10, // Defaults to negotiated value.
-    // Below options specified as default values.
-    concurrencyLimit: websocketConfig.concurrencyLimit, // Limits zlib concurrency for perf.
-    threshold: 1024 // Size (in bytes) below which messages
-    // should not be compressed if context takeover is disabled.
-  }
+  const wss = getWebSocketServerInstance();
 
-});
+  wss.on('connection', async (ws, req) => {
 
-wss.on('connection', async (ws, req) => {
+    const ip = req.socket.remoteAddress;
+    // Behind proxy
+    const proxyIp = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim();
 
-  const ip = req.socket.remoteAddress;
-  // Behind proxy
-  const proxyIp = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim();
+    ws.on('error', logger.error);
 
-  ws.on('error', logger.error);
+    ws.on('message', async (data) => {
 
-  ws.on('message', async (data) => {
+      logger.log(`Received message from IP ${ip}-${proxyIp}: ${data}`);
 
-    logger.log(`Received message from IP ${ip}-${proxyIp}: ${data}`);
+      await takeAction(data.toString(), ws);
 
-    await takeAction(data.toString(), ws);
+    });
+
+    ws.send(`I'm Up :)`);
 
   });
 
-  ws.send(`I'm Up :)`);
+};
 
-});
+function getWebSocketServerInstance() {
+
+  return new WebSocketServer({
+
+    port: websocketConfig.port,
+    perMessageDeflate: {
+      zlibDeflateOptions: {
+        // See zlib defaults.
+        chunkSize: 1024,
+        memLevel: 7,
+        level: 3
+      },
+      zlibInflateOptions: {
+        chunkSize: 10 * 1024
+      },
+      // Other options settable:
+      clientNoContextTakeover: true, // Defaults to negotiated value.
+      serverNoContextTakeover: true, // Defaults to negotiated value.
+      serverMaxWindowBits: 10, // Defaults to negotiated value.
+      // Below options specified as default values.
+      concurrencyLimit: websocketConfig.concurrencyLimit, // Limits zlib concurrency for perf.
+      threshold: 1024 // Size (in bytes) below which messages
+      // should not be compressed if context takeover is disabled.
+    }
+
+  });
+
+}
 
 async function takeAction(message, ws) {
 

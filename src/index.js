@@ -1,82 +1,29 @@
 // Import as early as possible
 import 'dotenv/config';
-import './websocket.js'
-import './redis.js'
-
-import { connect } from 'mqtt';
 
 import { defaultLogger as logger } from './logger.js';
-import { parseAction } from './ssh.js';
-import { safeParse } from './utils.js';
+import { bootstrap } from './bootstrap.js';
 
-import mqttInfo from './configs/mqtt-info.json' assert {type: 'json'};
+function showStartMessage() {
 
-logger.warn(' ---------- Make sure to provide all of the required env. variables ---------- ');
+  logger.warn(' ---------- Make sure to provide all of the required env. variables ---------- ');
+  logger.debug(` KNOWN ENV VARS
 
-const protocol = 'mqtt';
-const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
+HOME_ASSISTANT_TOKEN='homeassistant.valid.token'
+SWITCH_NAME='name of switch'
+SWITCH_ENTITY_ID='id of switch'
+MQTT_USERNAME=''
+MQTT_PASSWORD=''
+PI_SHUTDOWN_MIN=10
+EXTRA_WAIT_FOR_PI_SWITCH_MIN=5
 
-const connectUrl = `${protocol}://${mqttInfo.host}:${mqttInfo.port}`;
+`);
 
-const client = connect(connectUrl, {
-  clientId,
-  clean: true,
-  connectTimeout: mqttInfo.connectTimeout,
-  username: process.env.MQTT_USERNAME,
-  password: process.env.MQTT_PASSWORD,
-  reconnectPeriod: mqttInfo.reconnectPeriod,
-});
+}
 
-client.on('connect', () => {
+logger.log('Bootstrapping ...');
 
-  logger.info('Connected');
+showStartMessage();
+await bootstrap();
 
-  // client.publish(topic, 'pi4b.local connected', { qos: 0, retain: false }, (error) => {
-  //   if (error) {
-  //     logger.error(error);
-  //   }
-  // });
-
-  for (const topic of mqttInfo.topics) {
-
-    client.subscribe([topic], (err) => {
-
-      if (null === err) {
-
-        logger.info(`Subscribe to topic '${topic}'`);
-
-      } else {
-
-        logger.error(`Subscription failed for topic - ${topic} with error ${err}`);
-
-      }
-
-    });
-
-  }
-
-  client.on('message', async (topic, payload) => {
-
-    if (mqttInfo.topics.includes(topic)) {
-
-      const data = safeParse(payload.toString()) ?? payload.toString();
-
-      logger.log(`Received Message: ${topic}. JSON data - ${data}`);
-
-      const handler = parseAction(data);
-
-      await handler();
-
-    } else {
-
-      logger.debug(`Ignoring messages on ${topic} channel`);
-
-    }
-
-  });
-
-});
-
-client.on('error', (err) => logger.error(`client.on('error') - ${err}`));
-
-client.on('reconnect', (err) => logger.error(`Reconnect failed ${err}`));
+logger.log('Bootstrapping complete');

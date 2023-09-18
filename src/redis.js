@@ -5,8 +5,14 @@ import { pendingTimeoutIdRedisId } from './constants.js';
 
 export const redisClient = createClient();
 
-redisClient.on('error', err => console.log('Redis Client Error', err));
+export const connect = async () => {
 
-await redisClient.connect();
+  redisClient.on('error', err => console.log('Redis Client Error', err));
 
-logger.log(`Pending timeouts - ${await redisClient.get(pendingTimeoutIdRedisId)}`);
+  await redisClient.connect();
+
+  logger.debug(`Pending timeouts - ${await redisClient.get(pendingTimeoutIdRedisId)}`);
+
+  return redisClient;
+
+};
