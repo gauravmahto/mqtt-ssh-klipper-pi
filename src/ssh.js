@@ -112,7 +112,13 @@ async function initiateShutDown() {
 
       });
 
-    }).connect(sshInfo);
+    })
+    .on('error', (err) => {
+
+      logger.error(`Failed to log-in using provided ssh key. ${err}`);
+
+    })
+    .connect(sshInfo);
 
   // #region - perform su and run command
 
