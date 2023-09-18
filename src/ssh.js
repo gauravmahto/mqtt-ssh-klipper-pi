@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import process from 'node:process';
 
 import { Client } from 'ssh2';
 
@@ -88,6 +89,9 @@ async function initiateShutDown() {
             retryCount: 10,
             off: true
           });
+
+          // Perform suicide
+          process.exit(-99);
 
         }
 
