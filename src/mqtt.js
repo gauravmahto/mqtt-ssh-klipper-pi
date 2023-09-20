@@ -19,8 +19,10 @@ export async function connectMqtt() {
     connectTimeout: mqttInfo.connectTimeout,
     username: process.env.MQTT_USERNAME,
     password: process.env.MQTT_PASSWORD,
-    reconnectPeriod: mqttInfo.reconnectPeriod,
+    reconnectPeriod: mqttInfo.reconnectPeriod
   });
+
+  const mqttTopics = Object.values(mqttInfo.topics).flat();
 
   client.on('connect', () => {
 
@@ -32,54 +34,84 @@ export async function connectMqtt() {
     //   }
     // });
 
-    const mqttTopics = Object.values(mqttInfo.topics).flat();
+  });
 
-    for (const key in mqttInfo.topics) {
+  for (const key in mqttInfo.topics) {
 
-      for (const topic of mqttInfo.topics[key]) {
+    for (const topic of mqttInfo.topics[key]) {
 
-        client.subscribe([topic], (err) => {
+      client.subscribe([topic], (err) => {
 
-          if (null === err) {
+        if (null === err) {
 
-            logger.info(`MQTT: Subscribe to topic '${key}-${topic}'`);
+          logger.info(`MQTT: Subscribe to topic '${key}-${topic}'`);
 
-          } else {
+        } else {
 
-            logger.error(`MQTT: Subscription failed for topic - ${key}-${topic} with error ${err}`);
+          logger.error(`MQTT: Subscription failed for topic - ${key}-${topic} with error ${err}`);
 
-          }
+        }
 
-        });
-
-      }
+      });
 
     }
 
-    client.on('message', async (topic, payload) => {
+  }
 
-      if (mqttTopics.includes(topic)) {
+  client.on('message', async (topic, payload) => {
 
-        const data = safeParse(payload.toString()) ?? payload.toString();
+    if (mqttTopics.includes(topic)) {
 
-        logger.log(`MQTT: Received Message: ${topic}. JSON data - ${data}`);
+      const data = safeParse(payload.toString()) ?? payload.toString();
 
-        const handler = parseAction(data, topic);
+      logger.log(`MQTT: Received Message: ${topic}. JSON data - ${data}`);
 
-        await handler();
+      const handler = parseAction(data, topic);
 
-      } else {
+      await handler();
 
-        logger.debug(`MQTT: Ignoring messages on ${topic} channel`);
+    } else {
 
-      }
+      logger.debug(`MQTT: Ignoring messages on ${topic} channel`);
 
-    });
+    }
 
   });
 
-  client.on('error', (err) => logger.error(`MQTT: client.on('error') - ${err}`));
+  client.on('error', async (err) => {
 
-  client.on('reconnect', (err) => logger.error(`MQTT: Reconnect failed ${err}`));
+    logger.error(`MQTT: Error - ${err}`);
+
+  });
+
+  client.on('reconnect', async () => {
+
+    logger.error(`MQTT: Reconnected`);
+
+  });
+
+  client.on('close', async () => {
+
+    logger.error(`MQTT: Closed`);
+
+  });
+
+  client.on('disconnect', async () => {
+
+    logger.error(`MQTT: Disconnected`);
+
+  });
+
+  client.on('offline', async () => {
+
+    logger.error(`MQTT: Offline`);
+
+  });
+
+  client.on('end', async () => {
+
+    logger.error(`MQTT: End`);
+
+  });
 
 }

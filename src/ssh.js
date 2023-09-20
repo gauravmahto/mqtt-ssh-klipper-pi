@@ -77,6 +77,10 @@ export async function getPendingTimeouts() {
 
 export async function clearPendingTimeouts() {
 
+  logger.log(`Clearing any pending timeout and shutdowns`);
+
+  execFnForSSH((conn) => cancelScheduleShutDown(conn));
+
   const pendingTimeoutIds = await getPendingTimeouts();
 
   for (const pendingTimeoutId of pendingTimeoutIds) {
@@ -100,51 +104,75 @@ async function initiateShutDown() {
 
   await clearPendingTimeouts();
 
+  execFnForSSH((conn) => scheduleShutDown(conn));
+
+};
+
+function scheduleShutDown(conn) {
+
+  const afterMin = Number(process.env.PI_SHUTDOWN_MIN);
+  const afterMSecs = (afterMin + Number(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN)) * 60 * 1000;
+
+  conn.exec(`/usr/sbin/shutdown ${afterMin}`, (err, stream) => {
+
+    if (err) throw err;
+
+    async function powerOffPrinterSwitch() {
+
+      await setSwitchState({
+        switchName: process.env.SWITCH_NAME,
+        entityId: process.env.SWITCH_ENTITY_ID,
+        retryCount: 10,
+        off: true
+      });
+
+      await scheduleSelfProcessAutoKill();
+
+    }
+
+    handleStream(stream, conn, async () => {
+
+      await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
+
+    }, async (data, stream) => {
+
+      conn.exec('cat /run/systemd/shutdown/scheduled', async (err, stream) => {
+
+        if (err) throw err;
+
+        handleStream(stream);
+
+        await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
+
+      });
+
+    });
+
+
+  });
+
+}
+
+function cancelScheduleShutDown(conn) {
+
+  conn.exec(`/usr/sbin/shutdown -c`, (err, stream) => {
+
+    if (err) throw err;
+
+    handleStream(stream, conn);
+
+  });
+
+}
+
+function execFnForSSH(fn) {
+
   const conn = new Client();
 
   conn
     .on('ready', async () => {
 
-      const afterMin = Number(process.env.PI_SHUTDOWN_MIN);
-      const afterMSecs = (afterMin + Number(process.env.EXTRA_WAIT_FOR_PI_SWITCH_MIN)) * 60 * 1000;
-
-      conn.exec(`/usr/sbin/shutdown ${afterMin}`, (err, stream) => {
-
-        if (err) throw err;
-
-        async function powerOffPrinterSwitch() {
-
-          await setSwitchState({
-            switchName: process.env.SWITCH_NAME,
-            entityId: process.env.SWITCH_ENTITY_ID,
-            retryCount: 10,
-            off: true
-          });
-
-          await scheduleSelfProcessAutoKill();
-
-        }
-
-        handleStream(stream, conn, async () => {
-
-          await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
-
-        }, async (data, stream) => {
-
-          conn.exec('cat /run/systemd/shutdown/scheduled', async (err, stream) => {
-
-            if (err) throw err;
-
-            handleStream(stream);
-
-            await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
-
-          });
-
-        });
-
-
-      });
+      fn(conn);
 
     })
     .on('error', (err) => {
@@ -154,71 +182,11 @@ async function initiateShutDown() {
     })
     .connect(sshInfo);
 
-  // #region - perform su and run command
+  return conn;
 
-  // conn
-  //   .on('ready', () => {
-
-  //     logger.log(`Client :: ready`);
-
-  //     conn.exec('sudo su -', { pty: true }, (err, stream) => {
-
-  //       if (err) throw err;
-
-  //       let triedToLogin = false;
-
-  //       stream
-  //         .on('close', (code, signal) => {
-
-  //          logger.debug(`Stream :: close :: code: ${code}, signal: ${signal}`);
-
-  //           conn.end();
-
-  //         })
-  //         .on('data', (data) => {
-
-  //           logger.info(`STDOUT: ${data}`);
-
-  //           if (data.toString().includes(`root@${sudoUserName}`)) {
-  //             //logged in successfully
-
-  //             conn.exec('poweroff --help', (err, stream) => {
-  //               if (err) throw err;
-  //               stream.on('close', (code, signal) => {
-  //                logger.log(`Stream :: close :: code: ${code}, signal: ${signal}`);
-  //                 conn.end();
-  //               }).on('data', (data) => {
-  //                 logger.log(`STDOUT: ${data}`);
-  //               }).stderr.on('data', (data) => {
-  //                 logger.log(`STDERR: ${data}`);
-  //               });
-  //             });
-
-  //           } else if (!triedToLogin) {
-  //             //enter password
-  //             stream.write(passwordStr + '\n');
-  //             triedToLogin = true;
-  //           }
-
-  //         })
-  //         .stderr.on('data', (data) => {
-
-  //           logger.error(`STDERR: ${data}`);
-
-  //         });
-
-  //     });
-
-  //   })
-  //   .connect(sshInfo);
-
-  // #endregion - perform su and run command
-
-};
+}
 
 async function schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs) {
-
-  await clearPendingTimeouts();
 
   let pendingTimeoutIds = await getPendingTimeouts();
 
