@@ -12,6 +12,8 @@ import { pendingTimeoutIdRedisId } from './constants.js';
 
 import sshInfo from './configs/ssh-info.json' assert { type: 'json' };
 
+sshInfo.privateKey = await readFile(sshInfo.privateKeyPath);
+
 assert.ok(process.env.SWITCH_NAME, 'SWITCH_NAME env. variable is not provided');
 assert.ok(process.env.SWITCH_ENTITY_ID, 'SWITCH_ENTITY_ID env. variable is not provided');
 assert.ok(process.env.PI_SHUTDOWN_MIN, 'PI_SHUTDOWN_MIN env. variable is not provided');
@@ -100,8 +102,6 @@ async function initiateShutDown() {
 
   logger.info(`${ACTIONS.POWER_OFF} event handler invoked`);
 
-  sshInfo.privateKey = await readFile(sshInfo.privateKeyPath);
-
   await clearPendingTimeouts();
 
   execFnForSSH((conn) => scheduleShutDown(conn));
@@ -177,7 +177,7 @@ function execFnForSSH(fn) {
     })
     .on('error', (err) => {
 
-      logger.error(`Failed to log-in using provided ssh key. ${err}`);
+      logger.error(`Failed to log-in. Error - ${err}`);
 
     })
     .connect(sshInfo);
