@@ -4,10 +4,10 @@ import process from 'node:process';
 
 import { Client } from 'ssh2';
 
-import { isValidString, safeCb } from './utils.js';
+import { isValidString, safeCb, isNonEmptyArray } from './utils.js';
 import { defaultLogger as logger } from './logger.js';
 import { setSwitchState } from './home-assistant.js';
-import { redisClient } from './redis.js';
+import { redisClient, getJSONDataToStore, getParsedJSONReadData } from './redis.js';
 import { pendingTimeoutIdRedisId } from './constants.js';
 
 import sshInfo from './configs/ssh-info.json' assert { type: 'json' };
@@ -61,6 +61,37 @@ export function parseAction(data, topic) {
 
 }
 
+export async function getPendingTimeouts() {
+
+  let pendingTimeoutIds = getParsedJSONReadData(await redisClient.get(pendingTimeoutIdRedisId));
+
+  if (!isNonEmptyArray(pendingTimeoutIds)) {
+
+    pendingTimeoutIds = [];
+
+  }
+
+  return pendingTimeoutIds;
+
+}
+
+export async function clearPendingTimeouts() {
+
+  const pendingTimeoutIds = await getPendingTimeouts();
+
+  for (const pendingTimeoutId of pendingTimeoutIds) {
+
+    logger.debug(`Clearing pending timeout[ssh.js] ${pendingTimeoutId}`);
+
+    clearTimeout(Number(pendingTimeoutId));
+
+  }
+
+  // Assume all of the pending timeouts are cleared and force data delete
+  await redisClient.del(pendingTimeoutIdRedisId);
+
+}
+
 async function initiateShutDown() {
 
   logger.info(`${ACTIONS.POWER_OFF} event handler invoked`);
@@ -81,7 +112,7 @@ async function initiateShutDown() {
 
         if (err) throw err;
 
-        async function switchOffPowerToPi() {
+        async function powerOffPrinterSwitch() {
 
           await setSwitchState({
             switchName: process.env.SWITCH_NAME,
@@ -90,16 +121,13 @@ async function initiateShutDown() {
             off: true
           });
 
-          // Perform suicide
-          logger.log(`Performing suicide with exit code of 99 after a few seconds`);
-
-          setTimeout(() => process.exit(99), 60000);
+          await scheduleSelfProcessAutoKill();
 
         }
 
         handleStream(stream, conn, async () => {
 
-          await schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs);
+          await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
 
         }, async (data, stream) => {
 
@@ -109,7 +137,7 @@ async function initiateShutDown() {
 
             handleStream(stream);
 
-            await schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs);
+            await schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs);
 
           });
 
@@ -188,28 +216,28 @@ async function initiateShutDown() {
 
 };
 
-async function clearPendingTimeouts() {
-
-  let pendingTimeoutId = await redisClient.get(pendingTimeoutIdRedisId);
-
-  if (null !== pendingTimeoutId) {
-
-    logger.debug(`Clearing pending timeout[ssh.js] ${pendingTimeoutId}`);
-
-    clearTimeout(Number(pendingTimeoutId));
-
-    await redisClient.del(pendingTimeoutIdRedisId);
-
-  }
-
-}
-
-async function schedulePowerSwitchOff(switchOffPowerToPi, afterMSecs) {
+async function schedulePrinterSwitchOff(powerOffPrinterSwitch, afterMSecs) {
 
   await clearPendingTimeouts();
 
-  const pendingTimeoutId = String(setTimeout(switchOffPowerToPi, afterMSecs));
-  await redisClient.set(pendingTimeoutIdRedisId, pendingTimeoutId);
+  let pendingTimeoutIds = await getPendingTimeouts();
+
+  pendingTimeoutIds.push(String(setTimeout(powerOffPrinterSwitch, afterMSecs)));
+
+  await redisClient.set(pendingTimeoutIdRedisId, getJSONDataToStore(pendingTimeoutIds));
+
+}
+
+async function scheduleSelfProcessAutoKill(afterMs = 60000) {
+
+  // Perform suicide
+  logger.log(`Performing suicide with exit code of 99 after a few seconds`);
+
+  let pendingTimeoutIds = await getPendingTimeouts();
+
+  pendingTimeoutIds.push(String(setTimeout(() => process.exit(99), afterMs)));
+
+  await redisClient.set(pendingTimeoutIdRedisId, getJSONDataToStore(pendingTimeoutIds));
 
 }
 

@@ -45,3 +45,16 @@ export async function waitForSecs(seconds = 1) {
   await new Promise((res) => setTimeout(res, seconds * 1000));
 
 }
+
+export function isValidArray(obj) {
+
+  return Array.isArray(obj);
+
+}
+
+export function isNonEmptyArray(obj) {
+
+  return (isValidArray(obj) &&
+    obj.length > 0);
+
+}
