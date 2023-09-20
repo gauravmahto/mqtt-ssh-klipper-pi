@@ -23,7 +23,8 @@ export const ACTIONS = {
 
   POWER_OFF: 'power_off',
   PRINT_START: 'print_start',
-  PRINT_CANCEL: 'print_cancel'
+  PRINT_CANCEL: 'print_cancel',
+  PRINT_COMPLETE: 'print_complete'
 
 };
 
@@ -31,7 +32,8 @@ export const actionHandler = {
 
   [ACTIONS.POWER_OFF]: initiateShutDown,
   [ACTIONS.PRINT_START]: clearPendingTimeouts,
-  [ACTIONS.PRINT_CANCEL]: clearPendingTimeouts
+  [ACTIONS.PRINT_CANCEL]: clearPendingTimeouts,
+  [ACTIONS.PRINT_COMPLETE]: () => logger.debug(`Print complete`)
 
 };
 
@@ -49,6 +51,9 @@ export function parseAction(data, topic) {
 
       case ACTIONS.POWER_OFF:
         return safeCb(actionHandler[ACTIONS.POWER_OFF]);
+
+      case ACTIONS.PRINT_COMPLETE:
+        return safeCb(actionHandler[ACTIONS.PRINT_COMPLETE]);
 
       default:
         logger.debug(`No action identified via. passed action [${topic} - ${data}]`);
