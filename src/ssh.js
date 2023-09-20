@@ -91,7 +91,9 @@ async function initiateShutDown() {
           });
 
           // Perform suicide
-          process.exit(-99);
+          logger.log(`Performing suicide with exit code of 99 after a few seconds`);
+
+          setTimeout(() => process.exit(99), 60000);
 
         }
 
